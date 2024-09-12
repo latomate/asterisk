@@ -5205,9 +5205,11 @@ static int rtp_raw_write(struct ast_rtp_instance *instance, struct ast_frame *fr
 		rtp->expectedseqno = -1;
 	}
 
+	/* mbrss01: do not update lastts
 	if (ast_test_flag(frame, AST_FRFLAG_HAS_TIMING_INFO)) {
 		rtp->lastts = frame->ts * rate;
 	}
+	*/
 
 	ast_rtp_instance_get_remote_address(instance, &remote_address);
 
@@ -5650,6 +5652,20 @@ static void calc_rxstamp_and_jitter(struct timeval *tv,
 			, rx_rtp_ts
 			, rtp->rxstart
 		);
+
+		/*
+		 * Set the marker bit due to probable timestamp jump
+		 * It will update ssrc in bridge_p2p_rtp_write()
+		 */
+		if (rtp->owner) {
+			ast_log(LOG_WARNING, "[mbrss01] rtp->owner update source");
+			ast_rtp_update_source(rtp->owner);
+		}
+
+		if(rtp->bundled) {
+			ast_log(LOG_WARNING, "[mbrss01] rtp->bundled update source");
+			ast_rtp_update_source(rtp->bundled);
+		}
 
 		return;
 	}
@@ -7268,6 +7284,7 @@ static int bridge_p2p_rtp_write(struct ast_rtp_instance *instance,
 
 	/* If the marker bit has been explicitly set turn it on */
 	if (ast_test_flag(bridged, FLAG_NEED_MARKER_BIT)) {
+		ast_log(LOG_WARNING, "[mbrss01] RTP marker bit set in bridge_p2p_rtp_write()");
 		mark = 1;
 		ast_clear_flag(bridged, FLAG_NEED_MARKER_BIT);
 	}
@@ -7287,6 +7304,7 @@ static int bridge_p2p_rtp_write(struct ast_rtp_instance *instance,
 	if (mark) {
 		/* make this rtp instance aware of the new ssrc it is sending */
 		bridged->ssrc = ntohl(rtpheader[2]);
+		ast_log(LOG_WARNING, "[mbrss01] Changed the SSRC !");
 	}
 
 	/* Send the packet back out */
